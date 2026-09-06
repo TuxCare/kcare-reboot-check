@@ -79,6 +79,19 @@ which always reads kernel memory instead.
 It writes nothing, loads no kernel module, changes no sysctl, runs no other
 program, and makes no network connection.
 
+## Tests
+
+```
+python3 tests.py
+```
+
+Sixteen cases over the decision logic, standard library only, no root and no
+kernel access needed. They do not prove the check works against a real kernel
+— that was established against a crash dump and against live memory on a
+machine driven into each state. They exist so that editing the byte-parsing
+cannot silently break a branch, which matters because a broken branch does not
+raise: it returns CLEAN.
+
 ## Reporting a result
 
 If you get `10` or `20`, send the full output of `-v` along with the output of
