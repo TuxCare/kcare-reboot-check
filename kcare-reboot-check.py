@@ -4,9 +4,8 @@
 kcare-reboot-check.py -- decide whether this kernel must be rebooted.
 
 WHAT THIS LOOKS FOR
-    A KernelCare fixup module built before update-2026-01-27-1 could, when it
-    was unloaded, leave a stale 5-byte "jmp rel32" at offset +5 of three
-    kernel functions:
+    A fixup module built before update-2026-01-27-1 can, when it is unloaded,
+    leave a stale 5-byte "jmp rel32" at offset +5 of three kernel functions:
 
         unoptimize_kprobe, optimize_all_kprobes, proc_kprobes_optimization_handler
 
@@ -14,11 +13,11 @@ WHAT THIS LOOKS FOR
     release between 2026-01-27 and 2026-08-31 happened to patch those same
     functions, so its own valid redirect sat on top of the stale bytes and
     nothing went wrong.  Releases from update-2026-08-31-1 onward no longer
-    patch them, so the stale jump becomes live and the next patch apply panics
-    or hard-freezes the box.
+    patch them, so the stale jump becomes live and a subsequent patch apply
+    can panic or hard-freeze the box.
 
-    The damage exists ONLY in the running kernel's text.  Nothing on disk is
-    wrong.  A reboot clears it completely and permanently.
+    It exists ONLY in the running kernel's text.  Nothing on disk is wrong.
+    A reboot clears it completely and permanently.
 
 WHAT THIS SCRIPT DOES
     Strictly read-only.  It reads, and only reads:
@@ -59,7 +58,7 @@ CONFIDENCE, PER BRANCH
     A reboot leaves nothing to see.
 
 EXIT CODES
-    0   CLEAN         not affected -- no reboot needed for this defect
+    0   CLEAN         not affected -- no reboot needed for this condition
     10  NEEDS_REBOOT  affected     -- reboot this machine
     20  INCONCLUSIVE  could not read enough to decide -- see the reason field
     30  ERROR         usage or internal error
@@ -77,8 +76,8 @@ import time
 
 VERSION = '1.0'
 
-# The three functions the buggy fixup unload could corrupt.  They were always
-# corrupted together, by one unload, so a partial pattern is worth reporting.
+# The three functions a stale fixup unload could redirect.  They were always
+# redirected together, by one unload, so a partial pattern is worth reporting.
 FUNCS = [
     'unoptimize_kprobe',
     'optimize_all_kprobes',
@@ -91,7 +90,7 @@ FUNCS = [
 PATCH_SITE = 5
 JMP_REL32 = 0xE9
 
-# The fix (commit cc7565f7617) first shipped in update-2026-01-27-1, so a fixup
+# The fix first shipped in update-2026-01-27-1, so a fixup
 # module built on or after that date unloads cleanly.  A kernel that booted
 # after every feed had moved past that build cannot have been primed since
 # boot.  Feeds lag the build by days-to-weeks, so the default carries a 90-day
@@ -413,7 +412,7 @@ def kprobe_registered(addrs):
     """True if a real kprobe sits on one of these addresses.
 
     An optimized kprobe also installs a 5-byte jmp, which would look exactly
-    like the corruption.  Cheap to rule out; absent debugfs we just say so.
+    like a stale redirect.  Cheap to rule out; absent debugfs we just say so.
     """
     s = slurp('/sys/kernel/debug/kprobes/list', 65536)
     if s is None:
@@ -455,7 +454,7 @@ def classify(kc, blob, undo_ptr, sym):
     if sym not in blob.owned:
         # The loaded patch does not redirect this function, so this jmp is not
         # its doing.  Confirmed against the cached blobs of the two releases
-        # either side of the regression: K20260829_0002 patches all three of
+        # either side of that change: K20260829_0002 patches all three of
         # these functions, K20260902_0002 patches optimize_all_kprobes and
         # proc_kprobes_optimization_handler but no longer unoptimize_kprobe --
         # which is exactly what re-exposes the stale jump.
@@ -506,7 +505,7 @@ def run(opts):
     arch = os.uname()[4]
     if arch not in ('x86_64', 'amd64'):
         # The kprobes part of the patch is a no-op stub off x86_64, so the
-        # corrupting write never happened there.
+        # write in question never happened there.
         raise Bail(CLEAN, 'arch-not-affected', 'arch=%s' % arch)
 
     if os.geteuid() != 0:
@@ -519,7 +518,7 @@ def run(opts):
             # Nothing since this boot could have written the stale bytes, and
             # the bytes do not survive a boot.
             raise Bail(CLEAN, 'booted-after-fixed-builds',
-                       'booted %s, after the %s cut-off; corruption cannot survive a reboot'
+                       'booted %s, after the %s cut-off; stale bytes cannot survive a reboot'
                        % (time.strftime('%Y-%m-%d', time.gmtime(boot)),
                           time.strftime('%Y-%m-%d', time.gmtime(opts['cutoff']))))
 
@@ -533,7 +532,7 @@ def run(opts):
     if probe:
         raise Bail(INCONCLUSIVE, 'kprobe-registered',
                    'a live kprobe sits on a checked address; its jmp is '
-                   'indistinguishable from the corruption')
+                   'indistinguishable from a stale redirect')
 
     kc = KCore()
     try:

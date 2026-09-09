@@ -1,23 +1,23 @@
 # kcare-reboot-check
 
-Detects a running kernel that must be rebooted because of a KernelCare defect
-that corrupts kernel text. Read-only. Python 3, standard library only.
+Detects a running kernel that must be rebooted because of a stale patch
+redirect in kernel text. Read-only. Python 3, standard library only.
 
-## The problem
+## What it detects
 
-A KernelCare fixup module built before `update-2026-01-27-1` could, when
-unloaded, leave a stale 5-byte jump at offset `+5` of three kernel functions:
+A fixup module built before `update-2026-01-27-1` can, when unloaded, leave a
+stale 5-byte jump at offset `+5` of three kernel functions:
 `unoptimize_kprobe`, `optimize_all_kprobes`,
 `proc_kprobes_optimization_handler`.
 
 The jump points into memory that has since been freed. It stayed harmless
 because every release up to 2026-08-31 patched those same functions and
 covered it. Releases from `update-2026-08-31-1` onward no longer patch
-`unoptimize_kprobe`, so the stale jump becomes live and the next patch apply
-panics or hard-freezes the machine.
+`unoptimize_kprobe`, so the stale jump becomes live and a subsequent patch
+apply can panic or hard-freeze the machine.
 
-**The damage exists only in the running kernel's memory. Nothing on disk is
-wrong. A reboot clears it completely and permanently.**
+**This exists only in the running kernel's memory. Nothing on disk is wrong.
+A reboot clears it completely and permanently.**
 
 ## Usage
 
@@ -42,7 +42,7 @@ KCARE-REBOOT-CHECK result=NEEDS_REBOOT exit=10 host=example reason=stale-redirec
 | Code | Result | What to do |
 |------|--------|------------|
 | 0 | CLEAN | Nothing. This machine is not affected. |
-| 10 | NEEDS_REBOOT | **Reboot this machine.** Do not let it take another patch update first. |
+| 10 | NEEDS_REBOOT | **Reboot this machine.** |
 | 20 | INCONCLUSIVE | Could not read enough to decide. See the reason field. |
 | 30 | ERROR | Not root, or bad arguments. |
 
@@ -52,7 +52,7 @@ Suitable for a fleet scan: run it everywhere, collect exit codes, reboot the
 ## Use `--deep` if your patch level is pinned
 
 By default the check short-circuits to CLEAN when the machine booted after the
-fixed builds shipped, since the corruption cannot survive a reboot. That
+fixed builds shipped, since the stale bytes cannot survive a reboot. That
 assumes no older release has been applied since boot, which is not true if you
 pin a patch level or run an ePortal feed that lags. In that case run `--deep`,
 which always reads kernel memory instead.
